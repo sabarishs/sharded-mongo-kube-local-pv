@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: mongo-qr
+  labels:
+    app: mongo-qr
+spec:
+  selector:
+    matchLabels:
+      name: mongo-qr
+  template:
+    metadata:
+      labels:
+        name: mongo-qr
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: component
+                operator: In
+                values:
+                - api
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      containers:
+      - name: mongo-qr
+        image: mongo:3.4.9
+        command:
+          - "mongos"
+          - "--keyFile"
+          - "/etc/secrets/mongodb-keyfile"
+          - "--configdb"
+          - "crs/mongo-config-0.mongo-config-svc.default.svc.cluster.local:27017,mongo-config-1.mongo-config-svc.default.svc.cluster.local:27017,mongo-config-2.mongo-config-svc.default.svc.cluster.local:27017"
+          - "--port"
+          - "27017"
+        ports:
+        - containerPort: 27017
+          hostPort: 27017
+          name: main
+        volumeMounts:
+          - mountPath: /etc/secrets
+            name: secrets
+            readOnly: true
+      volumes:
+        - name: secrets
+          secret:
+            secretName: mongodb-key
+            defaultMode: 256

@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-config-svc
+  labels:
+    app: mongo-config
+    facing: internal
+    impl: native
+    group: mongo
+spec:
+  ports:
+  - protocol: TCP
+    port: 27017
+    targetPort: 27017
+    name: main
+  clusterIP: None
+  selector:
+    app: mongo-config
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo-config
+  labels:
+    app: mongo-config
+    group: mongo
+spec:
+  serviceName: mongo-config-svc
+  selector:
+    matchLabels:
+      app: mongo-config
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: mongo-config
+        group: mongo
+      name: mongo-config
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: component
+                operator: In
+                values: ["mongo-config"]
+      containers:
+      - name: mongo-config
+        image: mongo:3.4.9
+        command:
+          - "mongod"
+          - "--keyFile"
+          - "/etc/secrets/mongodb-keyfile"
+          - "--configsvr"
+          - "--replSet"
+          - "crs"
+          - "--port"
+          - "27017"
+          - "--dbpath"
+          - "/data/db"
+        ports:
+        - containerPort: 27017
+          name: main
+        volumeMounts:
+          - mountPath: /etc/secrets
+            name: secrets
+          - mountPath: /data/db
+            name: data
+      volumes:
+        - name: secrets
+          secret:
+            secretName: mongodb-key
+            defaultMode: 256
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 442Gi
+      storageClassName: local-storage
